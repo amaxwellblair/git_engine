@@ -1,0 +1,11 @@
+.spacer {
+  padding: 100px;
+}
+
+#dashboard_div {
+  text-align: center;
+}
+
+.button-border {
+  border-style: solid;
+}
