@@ -127,5 +127,11 @@ func baseURL(r *http.Request) string {
 }
 
 func templates() *template.Template {
-	return template.Must(template.ParseFiles("static/index.html", "static/_header.html", "static/_nav.html", "static/dashboard.html"))
+	return template.Must(template.ParseFiles(
+		"static/index.html",
+		"static/dashboard.html",
+		"static/_header.html",
+		"static/_nav.html",
+		"static/_footer.html",
+	))
 }
