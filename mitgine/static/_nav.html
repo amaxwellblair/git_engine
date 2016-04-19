@@ -2,6 +2,13 @@
   <div class="nav-wrapper container">
     <a href="/" class="brand-logo black-text"> <i class="large material-icons">search</i></a>
     <ul class="right hide-on-med-and-down">
+      <li id="logout">
+        <form method="post" action="/logout" class="inline">
+          <input type="hidden" name="_method" value="DELETE">
+          <button type="submit" class="link-button">LOGOUT</button>
+        </form>
+      </li>
+
     </ul>
   </div>
 </nav>
