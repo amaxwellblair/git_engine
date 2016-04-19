@@ -1,6 +1,7 @@
 package mitgine
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -23,8 +24,35 @@ func NewClient(secrets map[string]string) *Client {
 	}
 }
 
-func (c *Client) postAccessToken(code string) (*accessTokenResponse, error) {
+func (c *Client) getRepositories(token string) ([]*Repository, error) {
+	// Create URL
+	u := c.baseURL
+	u.Path = "/user/repos"
+
 	// Create request
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "token "+token)
+
+	// Send request
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse response
+	var repos []*Repository
+	if err = json.NewDecoder(resp.Body).Decode(&repos); err != nil {
+		return nil, err
+	}
+
+	return repos, nil
+}
+
+func (c *Client) postAccessToken(code string) (*accessTokenResponse, error) {
+	// Create URL
 	u := new(url.URL)
 	u.Scheme = "https"
 	u.Host = "github.com"
@@ -36,6 +64,8 @@ func (c *Client) postAccessToken(code string) (*accessTokenResponse, error) {
 	params.Add("redirect_uri", "http://localhost:9000/login/callback")
 	params.Add("state", c.secrets["githubState"])
 	u.RawQuery = params.Encode()
+
+	// Create request
 	req, err := http.NewRequest("POST", u.String(), nil)
 	if err != nil {
 		return nil, err
@@ -65,16 +95,13 @@ func (c *Client) postAccessToken(code string) (*accessTokenResponse, error) {
 	}, nil
 }
 
-type accessTokenRequest struct {
-	ClientID     string `json:"client_id"`
-	ClientSecret string `json:"client_secret"`
-	Code         string `json:"code"`
-	RedirectURI  string `json:"redirect_uri"`
-	State        string `json:"state"`
-}
-
 type accessTokenResponse struct {
 	AccessToken string `json:"access_token"`
 	Scope       string `json:"scope"`
 	TokenType   string `json:"token_type"`
+}
+
+// Repository holds information for a github repository
+type Repository struct {
+	Name string `json:"name"`
 }

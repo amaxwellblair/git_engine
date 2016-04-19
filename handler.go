@@ -1,6 +1,7 @@
 package mitgine
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"text/template"
@@ -31,21 +32,23 @@ func NewHandler() *Handler {
 // NewRouter creates a new router
 func (h *Handler) NewRouter() http.Handler {
 	r := mux.NewRouter()
-	r.HandleFunc("/", h.rootHandler).
+	r.HandleFunc("/", h.getRootHandler).
 		Methods("GET")
-	r.HandleFunc("/dashboard", h.dashboardHandler).
+	r.HandleFunc("/dashboard", h.getDashboardHandler).
 		Methods("GET")
-	r.HandleFunc("/login", h.loginHandler).
+	r.HandleFunc("/repositories", h.getRepositoriesHandler).
 		Methods("GET")
-	r.HandleFunc("/logout", h.logoutHandler).
+	r.HandleFunc("/login", h.getLoginHandler).
+		Methods("GET")
+	r.HandleFunc("/logout", h.deleteLogoutHandler).
 		Methods("DELETE")
-	r.HandleFunc("/login/callback", h.loginCallbackHandler).
+	r.HandleFunc("/login/callback", h.getLoginCallbackHandler).
 		Methods("GET")
 	r.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir("static/"))))
 	return handlers.HTTPMethodOverrideHandler(r)
 }
 
-func (h *Handler) rootHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getRootHandler(w http.ResponseWriter, r *http.Request) {
 	if isCurrentUser(r) {
 		http.Redirect(w, r, "/dashboard", http.StatusFound)
 		return
@@ -53,11 +56,31 @@ func (h *Handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 	h.templates.ExecuteTemplate(w, "index.html", nil)
 }
 
-func (h *Handler) dashboardHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	h.templates.ExecuteTemplate(w, "dashboard.html", nil)
 }
 
-func (h *Handler) loginHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getRepositoriesHandler(w http.ResponseWriter, r *http.Request) {
+	token := currentUser(r)
+	if token != "" {
+		http.Error(w, "unauthorized user", http.StatusForbidden)
+		return
+	}
+
+	//TODO: Check database for repositories first
+
+	// Retrieve repositories from Github
+	repos, err := h.client.getRepositories(token)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Send successful response
+	json.NewEncoder(w).Encode(repos)
+}
+
+func (h *Handler) getLoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Create url
 	u := new(url.URL)
 	u.Scheme = "https"
@@ -74,7 +97,7 @@ func (h *Handler) loginHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, u.String(), http.StatusFound)
 }
 
-func (h *Handler) logoutHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) deleteLogoutHandler(w http.ResponseWriter, r *http.Request) {
 	if isCurrentUser(r) {
 		// Delete cookie
 		cookie := http.Cookie{
@@ -92,7 +115,7 @@ func (h *Handler) logoutHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-func (h *Handler) loginCallbackHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getLoginCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse parameters
 	code := r.URL.Query().Get("code")
 
@@ -120,6 +143,14 @@ func (h *Handler) loginCallbackHandler(w http.ResponseWriter, r *http.Request) {
 func isCurrentUser(r *http.Request) bool {
 	_, err := r.Cookie("token")
 	return err != http.ErrNoCookie
+}
+
+func currentUser(r *http.Request) string {
+	token, err := r.Cookie("token")
+	if err != http.ErrNoCookie {
+		return ""
+	}
+	return token.Value
 }
 
 func baseURL(r *http.Request) string {
