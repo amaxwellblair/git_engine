@@ -2,7 +2,6 @@ package search
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"text/template"
@@ -71,9 +70,18 @@ func (h *Handler) getRepositoriesHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Retrieve repositores from elastic search
-	repos, err := h.store.GetRepositories(token)
-	if err != nil && err.Error() == "no repositories found" {
-		fmt.Println("Hi dad")
+	search := r.URL.Query().Get("term")
+	repos, err := h.store.GetRepositories(token, search)
+	if err != nil && (err.Error() == "no repository type exists for this token" || err.Error() == "no user exists for this token") {
+
+		// Create a user if no user exists
+		if err.Error() == "no user exists for this token" {
+			if err := h.store.CreateUserIndex(token); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
 		// Retrieve repositories from Github
 		repos, err = h.client.getRepositories(token)
 		if err != nil {
@@ -83,16 +91,24 @@ func (h *Handler) getRepositoriesHandler(w http.ResponseWriter, r *http.Request)
 
 		// Place respositories in elastic search
 		for i := 0; i < len(repos); i++ {
-			h.store.CreateRepository(token, repos[i])
+			if err := h.store.CreateRepository(token, repos[i]); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 	} else if err != nil {
-		fmt.Println("Hi mom")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Format data for autocomplete
+	var results []string
+	for _, r := range repos {
+		results = append(results, r.Name)
+	}
+
 	// Send successful response
-	json.NewEncoder(w).Encode(repos)
+	json.NewEncoder(w).Encode(results)
 }
 
 func (h *Handler) getLoginHandler(w http.ResponseWriter, r *http.Request) {

@@ -7,11 +7,19 @@
     {{template "_nav.html"}}
     <div class="container">
       <h3>Repositories</h3>
-      <div class="repos">
-        
+      <div class="ui-widget">
+        <label for="birds">Repository: </label>
+        <input id="birds">
       </div>
+
+      <div class="ui-widget" style="margin-top:2em; font-family:Arial">
+        Result:
+        <div id="log" style="height: 200px; width: 300px; overflow: auto;" class="ui-widget-content"></div>
+      </div>
+
     </div>
     {{template "_footer.html"}}
+    <script src="./js/jquery-ui/jquery-ui.js"></script>
     <script src="./js/dashboard.js"></script>
   </body>
 </html>
