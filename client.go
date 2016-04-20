@@ -1,4 +1,4 @@
-package mitgine
+package search
 
 import (
 	"encoding/json"

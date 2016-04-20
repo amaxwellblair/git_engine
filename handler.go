@@ -1,7 +1,8 @@
-package mitgine
+package search
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"text/template"
@@ -14,6 +15,7 @@ import (
 // Handler serves as a global context
 type Handler struct {
 	client    *Client
+	store     *Store
 	templates *template.Template
 	secrets   map[string]string
 	domain    string
@@ -23,6 +25,7 @@ type Handler struct {
 func NewHandler() *Handler {
 	return &Handler{
 		client:    NewClient(secrets()),
+		store:     NewStore(),
 		templates: templates(),
 		secrets:   secrets(),
 		domain:    "http://localhost:9000",
@@ -49,7 +52,7 @@ func (h *Handler) NewRouter() http.Handler {
 }
 
 func (h *Handler) getRootHandler(w http.ResponseWriter, r *http.Request) {
-	if isCurrentUser(r) {
+	if token := currentUser(r); token != "" {
 		http.Redirect(w, r, "/dashboard", http.StatusFound)
 		return
 	}
@@ -62,16 +65,28 @@ func (h *Handler) getDashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) getRepositoriesHandler(w http.ResponseWriter, r *http.Request) {
 	token := currentUser(r)
-	if token != "" {
+	if token == "" {
 		http.Error(w, "unauthorized user", http.StatusForbidden)
 		return
 	}
 
-	//TODO: Check database for repositories first
+	// Retrieve repositores from elastic search
+	repos, err := h.store.GetRepositories(token)
+	if err != nil && err.Error() == "no repositories found" {
+		fmt.Println("Hi dad")
+		// Retrieve repositories from Github
+		repos, err = h.client.getRepositories(token)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
-	// Retrieve repositories from Github
-	repos, err := h.client.getRepositories(token)
-	if err != nil {
+		// Place respositories in elastic search
+		for i := 0; i < len(repos); i++ {
+			h.store.CreateRepository(token, repos[i])
+		}
+	} else if err != nil {
+		fmt.Println("Hi mom")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -98,7 +113,7 @@ func (h *Handler) getLoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) deleteLogoutHandler(w http.ResponseWriter, r *http.Request) {
-	if isCurrentUser(r) {
+	if token := currentUser(r); token != "" {
 		// Delete cookie
 		cookie := http.Cookie{
 			Name:     "token",
@@ -140,14 +155,9 @@ func (h *Handler) getLoginCallbackHandler(w http.ResponseWriter, r *http.Request
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-func isCurrentUser(r *http.Request) bool {
-	_, err := r.Cookie("token")
-	return err != http.ErrNoCookie
-}
-
 func currentUser(r *http.Request) string {
 	token, err := r.Cookie("token")
-	if err != http.ErrNoCookie {
+	if err == http.ErrNoCookie {
 		return ""
 	}
 	return token.Value
