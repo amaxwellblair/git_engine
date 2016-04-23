@@ -2,6 +2,7 @@ package search
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -22,6 +23,35 @@ func NewClient(secrets map[string]string) *Client {
 		baseURL: url,
 		secrets: secrets,
 	}
+}
+
+func (c *Client) getCommits(token, name, owner string) ([]*GitCommit, error) {
+	// Create URL
+	u := c.baseURL
+	u.Path = fmt.Sprintf("/repos/%s/%s/commits", owner, name)
+
+	// Create request
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "token "+token)
+
+	// Send request
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse response
+	var commits []*GitCommit
+	err = json.NewDecoder(resp.Body).Decode(&commits)
+	defer resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return commits, nil
 }
 
 func (c *Client) getRepositories(token string) ([]*Repository, error) {
@@ -45,10 +75,38 @@ func (c *Client) getRepositories(token string) ([]*Repository, error) {
 	// Parse response
 	var repos []*Repository
 	if err = json.NewDecoder(resp.Body).Decode(&repos); err != nil {
+		fmt.Println(err.Error())
 		return nil, err
 	}
 
 	return repos, nil
+}
+
+func (c *Client) getUsername(token string) (string, error) {
+	// Create URL
+	u := c.baseURL
+	u.Path = "/user"
+
+	// Create request
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("Authorization", "token "+token)
+
+	// Send request
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	// Parse response
+	var user User
+	if err = json.NewDecoder(resp.Body).Decode(&user); err != nil {
+		return "", err
+	}
+
+	return user.Username, nil
 }
 
 func (c *Client) postAccessToken(code string) (*accessTokenResponse, error) {
@@ -103,5 +161,23 @@ type accessTokenResponse struct {
 
 // Repository holds information for a github repository
 type Repository struct {
-	Name string `json:"name"`
+	ID     int    `json:"id"`
+	Name   string `json:"name"`
+	Active bool   `json:"active,omitempty"`
+}
+
+// User holds information for a github user
+type User struct {
+	Username string `json:"login"`
+}
+
+// GitCommit holds Github commits from a specific repository
+type GitCommit struct {
+	HTML   string  `json:"html_url"`
+	Commit *Commit `json:"commit"`
+}
+
+// Commit holds the commit message
+type Commit struct {
+	Message string `json:"message"`
 }

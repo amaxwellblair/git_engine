@@ -2,6 +2,7 @@ package search
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"text/template"
@@ -40,6 +41,8 @@ func (h *Handler) NewRouter() http.Handler {
 		Methods("GET")
 	r.HandleFunc("/repositories", h.getRepositoriesHandler).
 		Methods("GET")
+	r.HandleFunc("/repositories/activate", h.postActivateRepositoryHandler).
+		Methods("POST")
 	r.HandleFunc("/login", h.getLoginHandler).
 		Methods("GET")
 	r.HandleFunc("/logout", h.deleteLogoutHandler).
@@ -62,6 +65,42 @@ func (h *Handler) getDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	h.templates.ExecuteTemplate(w, "dashboard.html", nil)
 }
 
+func (h *Handler) postActivateRepositoryHandler(w http.ResponseWriter, r *http.Request) {
+	token := currentUser(r)
+	if token == "" {
+		http.Error(w, "unauthorized user", http.StatusForbidden)
+		return
+	}
+
+	// Parse request
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "unauthorized user", http.StatusForbidden)
+		return
+	}
+	name := r.FormValue("name")
+
+	// Check if a repository already exists
+	if !h.store.RepoExists(token, name) {
+
+		// Create and populate the repository with commits
+		un, err := h.client.getUsername(token)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		} else if commits, err := h.client.getCommits(token, name, un); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		} else if err = h.store.CreateRepository(name, un, token, commits); err != nil {
+			fmt.Println(err.Error())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Update repositorylist with active status
+
+}
+
 func (h *Handler) getRepositoriesHandler(w http.ResponseWriter, r *http.Request) {
 	token := currentUser(r)
 	if token == "" {
@@ -76,6 +115,7 @@ func (h *Handler) getRepositoriesHandler(w http.ResponseWriter, r *http.Request)
 
 		// Create a user if no user exists
 		if err.Error() == "no user exists for this token" {
+
 			if err := h.store.CreateUserIndex(token); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -91,7 +131,7 @@ func (h *Handler) getRepositoriesHandler(w http.ResponseWriter, r *http.Request)
 
 		// Place respositories in elastic search
 		for i := 0; i < len(repos); i++ {
-			if err := h.store.CreateRepository(token, repos[i]); err != nil {
+			if err := h.store.CreateRepositoryList(token, repos[i]); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -108,7 +148,10 @@ func (h *Handler) getRepositoriesHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Send successful response
-	json.NewEncoder(w).Encode(results)
+	if err := json.NewEncoder(w).Encode(results); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *Handler) getLoginHandler(w http.ResponseWriter, r *http.Request) {
