@@ -1,11 +1,12 @@
 $(document).ready(function() {
-  displayLogout();
+  displayNav();
 });
 
-function displayLogout() {
+function displayNav() {
   var url = document.URL;
   var path = url.split("/").pop();
   if (path != "") {
     $("#logout").show();
+    $("#logo").show();
   }
 }

@@ -6,17 +6,20 @@
   <body>
     {{template "_nav.html"}}
     <div class="container">
-      <h3>Repositories</h3>
-      <div class="ui-widget">
-        <label for="birds">Repository: </label>
-        <input id="birds">
+      <div class="spacer"></div>
+      <div class="row" >
+        <div class="col m6 offset-m3" id="search_bar">
+          <div class="col m12">
+            <div class="ui-widget">
+              <label for="repository"></label>
+              <input id="repository" placeholder="Search Github repositories here...">
+            </div>
+            <br>
+            Active repositories
+            <ul class="collection with-header repo-holder"></ul>
+          </div>
+        </div>
       </div>
-
-      <div class="ui-widget" style="margin-top:2em; font-family:Arial">
-        Result:
-        <div id="log" style="height: 200px; width: 300px; overflow: auto;" class="ui-widget-content"></div>
-      </div>
-
     </div>
     {{template "_footer.html"}}
     <script src="./js/jquery-ui/jquery-ui.js"></script>
