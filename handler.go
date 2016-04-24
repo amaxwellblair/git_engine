@@ -2,7 +2,6 @@ package search
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"text/template"
@@ -91,13 +90,16 @@ func (h *Handler) postActivateRepositoryHandler(w http.ResponseWriter, r *http.R
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		} else if err = h.store.CreateRepository(name, un, token, commits); err != nil {
-			fmt.Println(err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 
 	// Update repositorylist with active status
+	if err := h.store.ActivateRepository(token, name); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 }
 

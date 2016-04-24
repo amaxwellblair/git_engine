@@ -161,7 +161,7 @@ type accessTokenResponse struct {
 
 // Repository holds information for a github repository
 type Repository struct {
-	ID     int    `json:"id"`
+	ID     int    `json:"id,omitempty"`
 	Name   string `json:"name"`
 	Active bool   `json:"active,omitempty"`
 }

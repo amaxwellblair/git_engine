@@ -1,6 +1,7 @@
 package search
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -86,6 +87,7 @@ func (s *Store) CreateRepositoryList(token string, r *Repository) error {
 
 	// Create repository suggestion
 	rs := &RepoSuggest{
+		ID:     r.ID,
 		Name:   r.Name,
 		Active: r.Active,
 		Suggest: &suggest{
@@ -136,6 +138,36 @@ func (s *Store) CreateRepository(name, owner, token string, commits []*GitCommit
 
 // ActivateRepository activates a repository
 func (s *Store) ActivateRepository(token, repoName string) error {
+	// Search for matching repository
+	query := elastic.NewMatchQuery("name", repoName)
+	searchResult, err := s.ES.Search(token).
+		Index(token).
+		Type("repository").
+		Query(query).
+		Do()
+	if err != nil {
+		return err
+	}
+
+	if searchResult.Hits == nil {
+		return errors.New("repository does not exist")
+	}
+	var repo Repository
+	if err := json.Unmarshal(*searchResult.Hits.Hits[0].Source, &repo); err != nil {
+		return err
+	}
+
+	script := elastic.NewScript("ctx._source.active = true")
+	_, err = s.ES.Update().
+		Index(token).
+		Type("repository").
+		Id(strconv.Itoa(repo.ID)).
+		Script(script).
+		Upsert(map[string]interface{}{"active": true}).
+		Do()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -262,14 +294,14 @@ func indexSettingsAndMapping() map[string]interface{} {
 	typeName := make(map[string]interface{})
 	all := make(map[string]interface{})
 	all["type"] = "string"
-	all["index_analyzer"] = "ngram_analyzer"
+	all["analyzer"] = "ngram_analyzer"
 	all["search_analyzer"] = "standard"
 
 	properties := make(map[string]interface{})
 	commitMessage := make(map[string]interface{})
 	commitMessage["type"] = "string"
 	commitMessage["include_in_all"] = "true"
-	commitMessage["index_analyzer"] = "ngram_analyzer"
+	commitMessage["analyzer"] = "ngram_analyzer"
 	commitMessage["search_analyzer"] = "standard"
 
 	properties["commit_message"] = commitMessage
