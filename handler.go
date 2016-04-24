@@ -40,6 +40,8 @@ func (h *Handler) NewRouter() http.Handler {
 		Methods("GET")
 	r.HandleFunc("/repositories", h.getRepositoriesHandler).
 		Methods("GET")
+	r.HandleFunc("/repositories/active", h.getActiveRepositoryHandler).
+		Methods("GET")
 	r.HandleFunc("/repositories/activate", h.postActivateRepositoryHandler).
 		Methods("POST")
 	r.HandleFunc("/login", h.getLoginHandler).
@@ -101,6 +103,31 @@ func (h *Handler) postActivateRepositoryHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
+}
+
+func (h *Handler) getActiveRepositoryHandler(w http.ResponseWriter, r *http.Request) {
+	token := currentUser(r)
+	if token == "" {
+		http.Error(w, "unauthorized user", http.StatusForbidden)
+		return
+	}
+
+	// Retrieve active repositories from elasticsearch
+	repos, err := h.store.GetActiveRepositories(token)
+	if err != nil {
+		http.Error(w, "unauthorized user", http.StatusForbidden)
+		return
+	}
+
+	// Package and send as an array of repository names
+	var repoNames []string
+	for _, repo := range repos {
+		repoNames = append(repoNames, repo.Name)
+	}
+	if err = json.NewEncoder(w).Encode(&repoNames); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *Handler) getRepositoriesHandler(w http.ResponseWriter, r *http.Request) {

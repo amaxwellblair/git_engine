@@ -68,8 +68,13 @@ type RepoSuggest struct {
 }
 
 type suggest struct {
-	Input  []string `json:"input"`
-	Output string   `json:"output"`
+	Input   []string `json:"input"`
+	Output  string   `json:"output"`
+	Payload *payload `json:"payload"`
+}
+
+type payload struct {
+	ID int `json:"id"`
 }
 
 // CreateRepositoryList creates a new repository type
@@ -93,6 +98,9 @@ func (s *Store) CreateRepositoryList(token string, r *Repository) error {
 		Suggest: &suggest{
 			Input:  []string{r.Name},
 			Output: r.Name,
+			Payload: &payload{
+				ID: r.ID,
+			},
 		},
 	}
 
@@ -163,7 +171,6 @@ func (s *Store) ActivateRepository(token, repoName string) error {
 		Type("repository").
 		Id(strconv.Itoa(repo.ID)).
 		Script(script).
-		Upsert(map[string]interface{}{"active": true}).
 		Do()
 	if err != nil {
 		return err
@@ -216,8 +223,9 @@ func (s *Store) GetRepositories(token, search string) ([]*Repository, error) {
 		return nil, errors.New("no repository type exists for this token")
 	}
 
-	comp := elastic.NewCompletionSuggester("repository-suggest")
-	comp.Field("suggest").Text(search)
+	comp := elastic.NewCompletionSuggester("repository-suggest").
+		Field("suggest").
+		Text(search)
 
 	searchResult, err := s.ES.Suggest(token).Suggester(comp).Do()
 	if err != nil {
@@ -228,10 +236,66 @@ func (s *Store) GetRepositories(token, search string) ([]*Repository, error) {
 
 	var repos []*Repository
 	for _, value := range sug {
-		repos = append(repos, &Repository{Name: value.Text})
+		active := value.Payload.(map[string]interface{})["id"].(float64)
+		on, err := s.isActivated(token, int(active))
+		if err != nil {
+			return nil, err
+		}
+		if !on {
+			repos = append(repos, &Repository{Name: value.Text})
+		}
 	}
 
 	return repos, nil
+}
+
+func (s *Store) isActivated(token string, id int) (bool, error) {
+	doc, err := s.ES.Get().
+		Index(token).
+		Type("repository").
+		Id(strconv.Itoa(id)).
+		Fields("active").
+		Do()
+	if err != nil {
+		return false, err
+	} else if !doc.Found {
+		return false, errors.New("no document found")
+	}
+
+	return doc.Fields["active"].([]interface{})[0].(bool), nil
+}
+
+// GetActiveRepositories retrieves active repositories from ES
+func (s *Store) GetActiveRepositories(token string) ([]*Repository, error) {
+	if !s.UserExist(token) {
+		return nil, errors.New("no user exists for this token")
+	} else if !s.RepoExists(token, "repository") {
+		return nil, errors.New("no repository type exists for this token")
+	}
+
+	// Search for matching repository
+	query := elastic.NewMatchQuery("active", true)
+	searchResult, err := s.ES.Search(token).
+		Index(token).
+		Type("repository").
+		Query(query).
+		Do()
+	if err != nil {
+		return nil, err
+	}
+
+	if searchResult.Hits != nil {
+		var repos []*Repository
+		for _, hit := range searchResult.Hits.Hits {
+			var repo Repository
+			if err := json.Unmarshal(*hit.Source, &repo); err != nil {
+				return nil, err
+			}
+			repos = append(repos, &repo)
+		}
+		return repos, nil
+	}
+	return nil, errors.New("repository does not exist")
 }
 
 func (s *Store) createAutoCompleteMapping(token string) error {
