@@ -1,6 +1,7 @@
-package mitgine
+package search
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"text/template"
@@ -13,6 +14,7 @@ import (
 // Handler serves as a global context
 type Handler struct {
 	client    *Client
+	store     *Store
 	templates *template.Template
 	secrets   map[string]string
 	domain    string
@@ -22,6 +24,7 @@ type Handler struct {
 func NewHandler() *Handler {
 	return &Handler{
 		client:    NewClient(secrets()),
+		store:     NewStore(),
 		templates: templates(),
 		secrets:   secrets(),
 		domain:    "http://localhost:9000",
@@ -31,33 +34,156 @@ func NewHandler() *Handler {
 // NewRouter creates a new router
 func (h *Handler) NewRouter() http.Handler {
 	r := mux.NewRouter()
-	r.HandleFunc("/", h.rootHandler).
+	r.HandleFunc("/", h.getRootHandler).
 		Methods("GET")
-	r.HandleFunc("/dashboard", h.dashboardHandler).
+	r.HandleFunc("/dashboard", h.getDashboardHandler).
 		Methods("GET")
-	r.HandleFunc("/login", h.loginHandler).
+	r.HandleFunc("/repositories", h.getRepositoriesHandler).
 		Methods("GET")
-	r.HandleFunc("/logout", h.logoutHandler).
+	r.HandleFunc("/repositories/active", h.getActiveRepositoryHandler).
+		Methods("GET")
+	r.HandleFunc("/repositories/activate", h.postActivateRepositoryHandler).
+		Methods("POST")
+	r.HandleFunc("/login", h.getLoginHandler).
+		Methods("GET")
+	r.HandleFunc("/logout", h.deleteLogoutHandler).
 		Methods("DELETE")
-	r.HandleFunc("/login/callback", h.loginCallbackHandler).
+	r.HandleFunc("/login/callback", h.getLoginCallbackHandler).
 		Methods("GET")
 	r.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir("static/"))))
 	return handlers.HTTPMethodOverrideHandler(r)
 }
 
-func (h *Handler) rootHandler(w http.ResponseWriter, r *http.Request) {
-	if isCurrentUser(r) {
+func (h *Handler) getRootHandler(w http.ResponseWriter, r *http.Request) {
+	if token := currentUser(r); token != "" {
 		http.Redirect(w, r, "/dashboard", http.StatusFound)
 		return
 	}
 	h.templates.ExecuteTemplate(w, "index.html", nil)
 }
 
-func (h *Handler) dashboardHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	h.templates.ExecuteTemplate(w, "dashboard.html", nil)
 }
 
-func (h *Handler) loginHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) postActivateRepositoryHandler(w http.ResponseWriter, r *http.Request) {
+	token := currentUser(r)
+	if token == "" {
+		http.Error(w, "unauthorized user", http.StatusForbidden)
+		return
+	}
+
+	// Parse request
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "unauthorized user", http.StatusForbidden)
+		return
+	}
+	name := r.FormValue("name")
+
+	// Check if a repository already exists
+	if !h.store.RepoExists(token, name) {
+
+		// Create and populate the repository with commits
+		un, err := h.client.getUsername(token)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		} else if commits, err := h.client.getCommits(token, name, un); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		} else if err = h.store.CreateRepository(name, un, token, commits); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Update repositorylist with active status
+	if err := h.store.ActivateRepository(token, name); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+}
+
+func (h *Handler) getActiveRepositoryHandler(w http.ResponseWriter, r *http.Request) {
+	token := currentUser(r)
+	if token == "" {
+		http.Error(w, "unauthorized user", http.StatusForbidden)
+		return
+	}
+
+	// Retrieve active repositories from elasticsearch
+	repos, err := h.store.GetActiveRepositories(token)
+	if err != nil {
+		http.Error(w, "unauthorized user", http.StatusForbidden)
+		return
+	}
+
+	// Package and send as an array of repository names
+	var repoNames []string
+	for _, repo := range repos {
+		repoNames = append(repoNames, repo.Name)
+	}
+	if err = json.NewEncoder(w).Encode(&repoNames); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) getRepositoriesHandler(w http.ResponseWriter, r *http.Request) {
+	token := currentUser(r)
+	if token == "" {
+		http.Error(w, "unauthorized user", http.StatusForbidden)
+		return
+	}
+
+	// Retrieve repositores from elastic search
+	search := r.URL.Query().Get("term")
+	repos, err := h.store.GetRepositories(token, search)
+	if err != nil && (err.Error() == "no repository type exists for this token" || err.Error() == "no user exists for this token") {
+
+		// Create a user if no user exists
+		if err.Error() == "no user exists for this token" {
+
+			if err := h.store.CreateUserIndex(token); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		// Retrieve repositories from Github
+		repos, err = h.client.getRepositories(token)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Place respositories in elastic search
+		for i := 0; i < len(repos); i++ {
+			if err := h.store.CreateRepositoryList(token, repos[i]); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Format data for autocomplete
+	var results []string
+	for _, r := range repos {
+		results = append(results, r.Name)
+	}
+
+	// Send successful response
+	if err := json.NewEncoder(w).Encode(results); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) getLoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Create url
 	u := new(url.URL)
 	u.Scheme = "https"
@@ -74,8 +200,8 @@ func (h *Handler) loginHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, u.String(), http.StatusFound)
 }
 
-func (h *Handler) logoutHandler(w http.ResponseWriter, r *http.Request) {
-	if isCurrentUser(r) {
+func (h *Handler) deleteLogoutHandler(w http.ResponseWriter, r *http.Request) {
+	if token := currentUser(r); token != "" {
 		// Delete cookie
 		cookie := http.Cookie{
 			Name:     "token",
@@ -92,7 +218,7 @@ func (h *Handler) logoutHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-func (h *Handler) loginCallbackHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getLoginCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse parameters
 	code := r.URL.Query().Get("code")
 
@@ -117,9 +243,12 @@ func (h *Handler) loginCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-func isCurrentUser(r *http.Request) bool {
-	_, err := r.Cookie("token")
-	return err != http.ErrNoCookie
+func currentUser(r *http.Request) string {
+	token, err := r.Cookie("token")
+	if err == http.ErrNoCookie {
+		return ""
+	}
+	return token.Value
 }
 
 func baseURL(r *http.Request) string {

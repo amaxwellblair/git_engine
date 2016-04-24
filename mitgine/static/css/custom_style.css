@@ -16,10 +16,23 @@
   color: black;
 }
 
+.repository {
+  border-style: solid;
+}
+
+#logo {
+  display: none;
+}
+
 #dashboard_div {
   text-align: center;
 }
 
 #logout {
   display: none;
+}
+
+#search_bar {
+  border-style: solid;
+  padding-top: 10px;
 }

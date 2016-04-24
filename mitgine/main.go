@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	h := mitgine.NewHandler()
+	h := search.NewHandler()
 	r := h.NewRouter()
 	http.ListenAndServe(":9000", r)
 }

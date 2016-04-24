@@ -5,11 +5,12 @@ Search your git commits using git_engine
 ### TODO:
 
 #### Main functionality
-* [ ] Authentication using Github OAuth
+* [x] Authentication using Github OAuth
+* [ ] Repository search
+* [ ] Allow for specific repos to be uploaded
 * [ ] Digest git commits using Github API
 * [ ] Log git commits in Elasticsearch
-* [ ] Allow for specific repos to be uploaded
-* [ ] List all git commits for a repo (paginated)
+* [ ] List all git commits for a repo (paginated) - ???
 * [ ] Advanced search and query functionality for commits
 * [ ] Auto-complete for commit titles on search
 
