@@ -6,13 +6,11 @@ Search your git commits using git_engine
 
 #### Main functionality
 * [x] Authentication using Github OAuth
-* [ ] Repository search
-* [ ] Allow for specific repos to be uploaded
-* [ ] Digest git commits using Github API
-* [ ] Log git commits in Elasticsearch
-* [ ] List all git commits for a repo (paginated) - ???
-* [ ] Advanced search and query functionality for commits
-* [ ] Auto-complete for commit titles on search
+* [x] Repository search
+* [x] Allow for specific repos to be uploaded
+* [x] Digest git commits using Github API
+* [x] Log git commits in Elasticsearch
+* [x] List all git commits for a repo
 
 #### Extensions
 * [ ] Search by git diffs

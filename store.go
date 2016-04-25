@@ -180,24 +180,35 @@ func (s *Store) ActivateRepository(token, repoName string) error {
 }
 
 // GetCommits returns commits for a given repository
-func (s *Store) GetCommits(token, repoName, substring string) ([]*GitCommit, error) {
-	// if !s.UserExist(token) {
-	// 	return nil, errors.New("no user exists for this token")
-	// } else if !s.RepoExists(token, repoName) {
-	// 	return nil, errors.New("no repository named " + repoName + " type exists for this token")
-	// }
-	//
-	// query := elastic.NewMatchQuery("_all", substring)
-	// searchResult, err := s.ES.Search(token).
-	// 	Index(token).
-	// 	Type(repoName).
-	// 	Query(query).
-	// 	Do()
-	// if err != nil {
-	// 	return nil, err
-	// }
-	//
-	return nil, nil
+func (s *Store) GetCommits(token, repoName, substring string) ([]*IndexCommit, error) {
+	if !s.UserExist(token) {
+		return nil, errors.New("no user exists for this token")
+	} else if !s.RepoExists(token, repoName) {
+		return nil, errors.New("no repository named " + repoName + " type exists for this token")
+	}
+
+	// Search for matching commits
+	query := elastic.NewMatchQuery("_all", substring)
+	searchResult, err := s.ES.Search(token).
+		Index(token).
+		Type(repoName).
+		Query(query).
+		Do()
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse search results
+	var commits []*IndexCommit
+	for _, hit := range searchResult.Hits.Hits {
+		var commit IndexCommit
+		if err := json.Unmarshal(*hit.Source, &commit); err != nil {
+			return nil, err
+		}
+		commits = append(commits, &commit)
+	}
+
+	return commits, nil
 }
 
 // IndexCommit contains the elements of the document to be indexed
@@ -339,8 +350,8 @@ func indexSettingsAndMapping() map[string]interface{} {
 	filter := make(map[string]interface{})
 	ngramFilter := make(map[string]interface{})
 	ngramFilter["type"] = "ngram"
-	ngramFilter["min_gram"] = 3
-	ngramFilter["max_gram"] = 3
+	ngramFilter["min_gram"] = 2
+	ngramFilter["max_gram"] = 20
 
 	analyzer := make(map[string]interface{})
 	ngramAnalyzer := make(map[string]interface{})

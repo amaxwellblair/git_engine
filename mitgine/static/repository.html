@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+{{template "_header.html"}}
+  <body>
+    {{template "_nav.html"}}
+      <div class="container">
+        <div class="spacer"></div>
+        <div class="row" >
+          <div class="col m8 offset-m2" id="search_bar">
+            <div class="col m12">
+              <div>
+                <!-- <form id="search_commit" action="form_url()" method="GET"> -->
+                <input id="search" placeholder="Search git commits here..." >
+                <!-- </form> -->
+              </div>
+              <br>
+              Matching commits
+              <ul class="collection with-header commit-holder"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    {{template "_footer.html"}}
+    <script src="/js/repository.js"></script>
+  </body>
+</html>
