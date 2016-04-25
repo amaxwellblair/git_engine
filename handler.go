@@ -40,6 +40,8 @@ func (h *Handler) NewRouter() http.Handler {
 		Methods("GET")
 	r.HandleFunc("/dashboard/{repository}", h.getRepositoryHandler).
 		Methods("GET")
+	r.HandleFunc("/dashboard/{repository}/commits", h.getRepositoryCommitsHandler).
+		Methods("GET")
 	r.HandleFunc("/repositories", h.getRepositoriesHandler).
 		Methods("GET")
 	r.HandleFunc("/repositories/active", h.getActiveRepositoriesHandler).
@@ -192,6 +194,32 @@ func (h *Handler) getRepositoriesHandler(w http.ResponseWriter, r *http.Request)
 
 	// Send successful response
 	if err := json.NewEncoder(w).Encode(results); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) getRepositoryCommitsHandler(w http.ResponseWriter, r *http.Request) {
+	token := currentUser(r)
+	if token == "" {
+		http.Error(w, "unauthorized user", http.StatusForbidden)
+		return
+	}
+
+	// Parse URL params
+	args := mux.Vars(r)
+	repoName := args["repository"]
+	search := r.URL.Query().Get("term")
+
+	// Get commits from elasticsearch
+	commits, err := h.store.GetCommits(token, repoName, search)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Send a successful response
+	if err := json.NewEncoder(w).Encode(&commits); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

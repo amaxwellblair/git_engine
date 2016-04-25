@@ -1,32 +1,48 @@
 $('#search').keypress(function (e) {
   if (e.which == 13) {
     var input = $('#search').val();
+    clear_log();
     get_commits(input);
     return false;
   }
 });
 
 function get_commits(search) {
-  $.get(commits_url(), function (data) {
+  $.get(commits_url(search), function (data) {
     var commits = JSON.parse(data);
     put_commits(commits);
   });
 }
 
 function log(commit) {
-  var url = (commit["html_url"]);
-  $("<a class='collection-item' href='"+url+"'>"+commit["message"]+"</a>").text(commit["message"]).appendTo(".commit-holder");
+  var url = commit["html_url"];
+  var message = commit["commit_message"];
+  $("<a class='collection-item' target='_blank' href='"+url+"'>"+message+"</a>").text(message).appendTo(".commit-holder");
   $(".commit-holder").scrollTop(0);
 }
 
+function no_log() {
+  var message = "No commits found...";
+  $("<li class='collection-item'>"+message+"</li>").text(message).appendTo(".commit-holder");
+  $(".commit-holder").scrollTop(0);
+}
+
+function clear_log() {
+  $(".commit-holder").empty();
+}
+
 function put_commits(commits) {
-  for (var i = 0; i < commits.length; i++) {
-    log(commits[i]);
+  if (commits != null) {
+    for (var i = 0; i < commits.length; i++) {
+      log(commits[i]);
+    }
+  } else {
+      no_log();
   }
 }
 
-function commits_url() {
+function commits_url(term) {
   var bits = document.URL.split("/");
   var repo = bits[bits.length - 1];
-  return "http://localhost:9000/"+repo+"/commits";
+  return "http://localhost:9000/dashboard/"+repo+"/commits?term="+term;
 }
