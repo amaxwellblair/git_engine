@@ -2,6 +2,12 @@ $(document).ready(function () {
   retrieveActive();
 });
 
+function log( message ) {
+  var url = ("http://localhost:9000/dashboard/" + message);
+  $( "<a class='collection-item' href='"+url+"'>"+message+"</a>" ).text( message ).appendTo( ".repo-holder" );
+  $( ".repo-holder" ).scrollTop( 0 );
+}
+
 function retrieveActive() {
   $.get("http://localhost:9000/repositories/active", function(data) {
     var repos = JSON.parse(data);
@@ -9,11 +15,6 @@ function retrieveActive() {
       log(repos[i]);
     }
   });
-}
-
-function log( message ) {
-  $( "<li class='collection-item'><div>"+message+"</div></li>" ).text( message ).appendTo( ".repo-holder" );
-  $( ".repo-holder" ).scrollTop( 0 );
 }
 
 function activate(repository) {

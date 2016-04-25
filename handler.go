@@ -38,11 +38,13 @@ func (h *Handler) NewRouter() http.Handler {
 		Methods("GET")
 	r.HandleFunc("/dashboard", h.getDashboardHandler).
 		Methods("GET")
+	r.HandleFunc("/dashboard/{repository}", h.getRepositoryHandler).
+		Methods("GET")
 	r.HandleFunc("/repositories", h.getRepositoriesHandler).
 		Methods("GET")
-	r.HandleFunc("/repositories/active", h.getActiveRepositoryHandler).
+	r.HandleFunc("/repositories/active", h.getActiveRepositoriesHandler).
 		Methods("GET")
-	r.HandleFunc("/repositories/activate", h.postActivateRepositoryHandler).
+	r.HandleFunc("/repositories/activate", h.postActivateRepositoriesHandler).
 		Methods("POST")
 	r.HandleFunc("/login", h.getLoginHandler).
 		Methods("GET")
@@ -63,10 +65,22 @@ func (h *Handler) getRootHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getDashboardHandler(w http.ResponseWriter, r *http.Request) {
+	if token := currentUser(r); token == "" {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
 	h.templates.ExecuteTemplate(w, "dashboard.html", nil)
 }
 
-func (h *Handler) postActivateRepositoryHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getRepositoryHandler(w http.ResponseWriter, r *http.Request) {
+	if token := currentUser(r); token == "" {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	h.templates.ExecuteTemplate(w, "repository.html", nil)
+}
+
+func (h *Handler) postActivateRepositoriesHandler(w http.ResponseWriter, r *http.Request) {
 	token := currentUser(r)
 	if token == "" {
 		http.Error(w, "unauthorized user", http.StatusForbidden)
@@ -105,7 +119,7 @@ func (h *Handler) postActivateRepositoryHandler(w http.ResponseWriter, r *http.R
 
 }
 
-func (h *Handler) getActiveRepositoryHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getActiveRepositoriesHandler(w http.ResponseWriter, r *http.Request) {
 	token := currentUser(r)
 	if token == "" {
 		http.Error(w, "unauthorized user", http.StatusForbidden)
@@ -259,6 +273,7 @@ func templates() *template.Template {
 	return template.Must(template.ParseFiles(
 		"static/index.html",
 		"static/dashboard.html",
+		"static/repository.html",
 		"static/_header.html",
 		"static/_nav.html",
 		"static/_footer.html",
