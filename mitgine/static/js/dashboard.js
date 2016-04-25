@@ -1,5 +1,6 @@
 $(document).ready(function () {
   retrieveActive();
+  load_repos();
 });
 
 function log( message ) {
@@ -19,6 +20,10 @@ function retrieveActive() {
 
 function activate(repository) {
   $.post("http://localhost:9000/repositories/activate", { name: repository });
+}
+
+function load_repos() {
+  $.get("http://localhost:9000/repositories")
 }
 
 $(function() {
