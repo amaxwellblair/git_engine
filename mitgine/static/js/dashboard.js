@@ -3,6 +3,10 @@ $(document).ready(function () {
   load_repos();
 });
 
+$(".refresh-button").click(function() {
+  $.get("http://localhost:9000/refresh/repositories")
+})
+
 function log( message ) {
   var url = ("http://localhost:9000/dashboard/" + message);
   $( "<a class='collection-item' href='"+url+"'>"+message+"</a>" ).text( message ).appendTo( ".repo-holder" );

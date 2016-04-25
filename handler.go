@@ -48,6 +48,8 @@ func (h *Handler) NewRouter() http.Handler {
 		Methods("GET")
 	r.HandleFunc("/repositories/activate", h.postActivateRepositoriesHandler).
 		Methods("POST")
+	r.HandleFunc("/refresh/repositories", h.getRefreshRepositoryHandler).
+		Methods("GET")
 	r.HandleFunc("/login", h.getLoginHandler).
 		Methods("GET")
 	r.HandleFunc("/logout", h.deleteLogoutHandler).
@@ -80,6 +82,30 @@ func (h *Handler) getRepositoryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.templates.ExecuteTemplate(w, "repository.html", nil)
+}
+
+func (h *Handler) getRefreshRepositoryHandler(w http.ResponseWriter, r *http.Request) {
+	token := currentUser(r)
+	if token == "" {
+		http.Error(w, "unauthorized user", http.StatusForbidden)
+		return
+	}
+
+	// Retrieve repositories from Github
+	repos, err := h.client.getRepositories(token)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Place respositories in elastic search
+	for i := 0; i < len(repos); i++ {
+		if err := h.store.CreateRepositoryList(token, repos[i]); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
 }
 
 func (h *Handler) postActivateRepositoriesHandler(w http.ResponseWriter, r *http.Request) {
@@ -160,7 +186,6 @@ func (h *Handler) getRepositoriesHandler(w http.ResponseWriter, r *http.Request)
 
 		// Create a user if no user exists
 		if err.Error() == "no user exists for this token" {
-
 			if err := h.store.CreateUserIndex(token); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return

@@ -20,6 +20,17 @@
   border-style: solid;
 }
 
+.refresh-button {
+  background: none;
+  border: none;
+}
+
+#refresh {
+  position: absolute;
+  top: 10%;
+  right: 5%;
+}
+
 #logo {
   display: none;
 }
@@ -33,6 +44,7 @@
 }
 
 #search_bar {
+  position: relative;
   border-style: solid;
   padding-top: 10px;
 }
